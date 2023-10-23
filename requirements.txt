@@ -1,7 +1,4 @@
-ipython
-jupyter
 #matplotlib
-#numpy
 #pandas
 #pmdarima
 #scikit-learn
@@ -10,3 +7,7 @@ jupyter
 #torch
 #torchvision
 gensim
+ipython
+jupyter
+numpy
+wget
