@@ -1,0 +1,12 @@
+ipython
+jupyter
+#matplotlib
+#numpy
+#pandas
+#pmdarima
+#scikit-learn
+#scipy
+#statsmodels
+#torch
+#torchvision
+gensim
