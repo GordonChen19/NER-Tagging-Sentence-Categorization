@@ -1,0 +1,13 @@
+.direnv/
+.envrc
+.ipynb_checkpoints/
+.venv/
+__pycache__
+_build/
+data/
+flake.lock
+flake.nix
+notebooks/submission.csv
+
+# Allow .gitkeep in data directory to keep the project structure
+!data/.gitkeep
