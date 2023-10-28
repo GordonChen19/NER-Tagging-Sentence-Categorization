@@ -5,6 +5,7 @@ import time
 import os
 import random
 import numpy as np
+import string
 
 
 # function to get all words not in the word2vec model
@@ -18,6 +19,19 @@ def get_words_not_in_model(set, w2v):
                 if word.lower() not in w2v.key_to_index:
                     abs_w2v_lower.append(word.lower())
     return abs_w2v, abs_w2v_lower
+
+
+# function to remove words that are puncutation, numbers, or special characters
+def remove_punc_num_special(s):
+    clean_set = []
+    for sentence in s:
+        clean_sentence = []
+        for word, tag in sentence:
+            if any(c.isalpha() for c in word):
+                clean_sentence.append([word, tag])
+        clean_set.append(clean_sentence)
+    return clean_set
+
 
 
 # takes in a set of sentences in the form of a list of lists of tuples, and 
@@ -52,7 +66,7 @@ class NERDataset(Dataset):
         label = self.labels[index]
         original_length = len(sentence)
         
-        sentence = [self.word_to_ix.get(word, 0) for word in sentence]  # 0 is for <UNK>
+        sentence = [self.word_to_ix.get(word, 3000000) for word in sentence] # 3000000 is the index for <UNK>
         label = [self.tag_to_ix[tag] for tag in label]
         
         return torch.tensor(sentence, dtype=torch.long), torch.tensor(label, dtype=torch.long), original_length
@@ -60,19 +74,24 @@ class NERDataset(Dataset):
 
 # function to pad the sequences in a batch
 def pad_collate(batch):
-    (xx, yy, lens) = zip(*batch) # unzip the batch
+    (xx, yy, lens) = zip(*batch)  # unzip the batch
 
-    x_lens = [len(x) for x in xx] # get lengths of sequences
-    y_lens = [len(y) for y in yy] # get lengths of labels
+    x_lens = [len(x) for x in xx]  # get lengths of sequences
+    y_lens = [len(y) for y in yy]  # get lengths of labels
 
-    xx_pad = torch.zeros(len(xx), max(x_lens), dtype=torch.long) # create a matrix of zeros with correct dimensions
-    yy_pad = torch.zeros(len(yy), max(y_lens), dtype=torch.long) # create a matrix of zeros with correct dimensions
+    max_x_len = max(x_lens)
+    max_y_len = max(y_lens)
+
+    xx_pad = torch.full((len(xx), max_x_len), 3000000, dtype=torch.long)  # create a matrix filled with 3000000
+    yy_pad = torch.zeros(len(yy), max_y_len, dtype=torch.long)  # create a matrix of zeros with correct dimensions
 
     for i, (x, y) in enumerate(zip(xx, yy)):
         xx_pad[i, :x_lens[i]] = x
         yy_pad[i, :y_lens[i]] = y
     
     return xx_pad, yy_pad, lens
+
+
 
 
 # early stopping obtained from tutorial
@@ -133,6 +152,9 @@ def train_step(model, trainloader, optimizer, device, lossfn):
     return train_loss
 
 
+from sklearn.metrics import f1_score
+
+
 # Test step
 def val_step(model, valloader, lossfn, device):
     model.eval() # set model to evaluation mode
@@ -142,7 +164,7 @@ def val_step(model, valloader, lossfn, device):
 
     with torch.no_grad(): # disable gradient calculation
         for data in valloader:
-            inputs, labels, _ = data # get the inputs and labels
+            inputs, labels, lens = data # get the inputs and labels and actual lengths
             inputs, labels = inputs.to(device), labels.to(device) # move them to the device
 
             # Forward pass
@@ -150,15 +172,27 @@ def val_step(model, valloader, lossfn, device):
             loss = lossfn(outputs, labels)
 
             total_loss += loss.item()
-            _, predicted = torch.max(outputs.data, 1) # get the index of the max log-probability
 
-            correct += (predicted == labels).sum().item() # accumulate correct predictions
-            total_words += labels.numel() # accumulate total number of words
+            # Get the index of the max log-probability along the tagset_size dimension
+            _, predicted = torch.max(outputs.permute(0, 2, 1), 2)
+
+            batch_preds = []
+            batch_labels = []
+
+            for i in range(len(lens)):
+                batch_preds.extend(predicted[i, :lens[i]].cpu().numpy())  # Append predictions but only up to the actual length of the sentence
+                batch_labels.extend(labels[i, :lens[i]].cpu().numpy())
+
+            correct += sum(p == l for p, l in zip(batch_preds, batch_labels))  # Accumulate correct predictions for this batch
+            total_words += sum(lens)  # Accumulate the actual sentence lengths for this batch
 
     val_loss = total_loss / len(valloader)
-    accuracy = 100 * correct / total_words 
+    accuracy = 100 * correct / total_words
+    f1 = f1_score(batch_labels, batch_preds, average='macro') 
 
-    return val_loss, accuracy
+    return val_loss, accuracy, f1
+
+
 
 
 # Save model
@@ -171,6 +205,7 @@ def train(model, tl, vl, opt, loss, device, epochs, early_stopper, path):
     train_loss_list = []
     val_loss_list = []
     val_acc_list = []
+    f1_list = []
 
     for epoch in range(epochs):  # loop over the dataset multiple times
         start_time = time.time()  # Record the start time of the epoch
@@ -179,17 +214,18 @@ def train(model, tl, vl, opt, loss, device, epochs, early_stopper, path):
         pbar = tqdm(enumerate(tl), total=len(tl), desc=f"Epoch {epoch+1}/{epochs}")
 
         train_loss = train_step(model, pbar, opt, device, loss)  # Pass the tqdm-wrapped loader
-        val_loss, val_acc = val_step(model, vl, loss, device)
+        val_loss, val_acc, F1 = val_step(model, vl, loss, device)
 
         train_loss_list.append(train_loss)
         val_loss_list.append(val_loss)
         val_acc_list.append(val_acc)
+        f1_list.append(F1)
 
         # Print time taken for epoch
         end_time = time.time()
         elapsed_time = end_time - start_time
 
-        print(f'Epoch {epoch+1}/{epochs} took {elapsed_time:.2f}s | Train loss: {train_loss:.4f} | Val loss: {val_loss:.4f} | Val accuracy: {val_acc:.2f}% | EarlyStopper count: {early_stopper.counter}')
+        print(f'Epoch {epoch+1}/{epochs} took {elapsed_time:.2f}s | Train loss: {train_loss:.4f} | Val loss: {val_loss:.4f} | Val accuracy: {val_acc:.2f}% | F1: {F1:.4f} | EarlyStopper count: {early_stopper.counter}')
 
         # save as last_model after every epoch
         save_model(model, os.path.join(path, 'last_model.pt'))
@@ -202,7 +238,7 @@ def train(model, tl, vl, opt, loss, device, epochs, early_stopper, path):
             print('Early stopping')
             break
 
-    return train_loss_list, val_loss_list, val_acc_list
+    return train_loss_list, val_loss_list, val_acc_list, f1_list
 
 
 
