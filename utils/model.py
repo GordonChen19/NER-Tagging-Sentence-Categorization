@@ -21,6 +21,10 @@ class NERModel(nn.Module):
 
 
     def forward(self, sentences):
+        '''
+        sentences: batch_size x max_seq_length
+        tag_space: batch_size x tagset_size x max_seq_length
+        '''
         embeds = self.word_embeddings(sentences) # Embed the input sentence
 
         # LSTM input shape: batch_size x max_seq_length x embedding_dim
