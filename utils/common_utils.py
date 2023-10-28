@@ -94,6 +94,18 @@ class EarlyStopper:
         return False # continue training
 
 
+# set random seed
+def set_seed(seed = 0):
+    '''
+    set random seed
+    '''
+    random.seed(seed)
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True 
+
+
 # Train step
 def train_step(model, trainloader, optimizer, device, lossfn):
     model.train()  # set model to training mode
@@ -101,7 +113,7 @@ def train_step(model, trainloader, optimizer, device, lossfn):
 
     # Iterate over the training data
     for i, data in trainloader:
-        inputs, labels = data  # get the inputs and labels
+        inputs, labels, _ = data  # get the inputs and labels
         inputs, labels = inputs.to(device), labels.to(device)  # move them to the device
 
         optimizer.zero_grad()  # zero the gradients
@@ -121,27 +133,16 @@ def train_step(model, trainloader, optimizer, device, lossfn):
     return train_loss
 
 
-# set random seed
-def set_seed(seed = 0):
-    '''
-    set random seed
-    '''
-    random.seed(seed)
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True 
-
-
 # Test step
 def val_step(model, valloader, lossfn, device):
     model.eval() # set model to evaluation mode
     total_loss = 0.0
     correct = 0
+    total_words = 0
 
     with torch.no_grad(): # disable gradient calculation
         for data in valloader:
-            inputs, labels = data # get the inputs and labels
+            inputs, labels, _ = data # get the inputs and labels
             inputs, labels = inputs.to(device), labels.to(device) # move them to the device
 
             # Forward pass
@@ -152,9 +153,10 @@ def val_step(model, valloader, lossfn, device):
             _, predicted = torch.max(outputs.data, 1) # get the index of the max log-probability
 
             correct += (predicted == labels).sum().item() # accumulate correct predictions
+            total_words += labels.numel() # accumulate total number of words
 
     val_loss = total_loss / len(valloader)
-    accuracy = 100 * correct / len(valloader.dataset)
+    accuracy = 100 * correct / total_words 
 
     return val_loss, accuracy
 

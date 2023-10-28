@@ -15,15 +15,27 @@ class NERModel(nn.Module):
         else:
             self.word_embeddings = nn.Embedding(vocab_size, embedding_dim) 
 
-        self.lstm = nn.LSTM(embedding_dim, hidden_dim) # The LSTM takes word embeddins as inputs, and outputs hidden states with dimensionality hidden_dim
+        self.lstm = nn.LSTM(embedding_dim, hidden_dim, batch_first=True)
 
         self.hidden2tag = nn.Linear(hidden_dim, tagset_size) # Linear layer maps from hidden state space to tag space
 
 
-    def forward(self, sentence):
-        embeds = self.word_embeddings(sentence) # Embed the input sentence
+    def forward(self, sentences):
+        embeds = self.word_embeddings(sentences) # Embed the input sentence
 
-        lstm_out, _ = self.lstm(embeds.view(len(sentence), 1, -1)) # LSTM layer
-        tag_space = self.hidden2tag(lstm_out.view(len(sentence), -1)) # Linear layer output
-        tag_scores = F.log_softmax(tag_space, dim=1) # Softmax layer
-        return tag_scores # Return output
+        # LSTM input shape: batch_size x max_seq_length x embedding_dim
+        lstm_out, _ = self.lstm(embeds)
+        
+        # LSTM output shape: batch_size x max_seq_length x hidden_dim
+        # reshape it for the linear layer
+        lstm_out = lstm_out.contiguous().view(-1, self.hidden_dim) # shape: (batch_size * max_seq_length) x hidden_dim
+
+        tag_space = self.hidden2tag(lstm_out)
+
+        # reshape back to batch_size x max_seq_length x tagset_size
+        tag_space = tag_space.contiguous().view(sentences.shape[0], sentences.shape[1], -1)
+
+        # swap dimensions to make it batch_size x tagset_size x max_seq_length
+        tag_space = tag_space.permute(0, 2, 1)
+
+        return tag_space # Return output
