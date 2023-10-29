@@ -8,6 +8,8 @@ data/
 flake.lock
 flake.nix
 notebooks/submission.csv
+.DS_Store
+*.DS_Store
 
 # Allow .gitkeep in data directory to keep the project structure
 !data/.gitkeep
