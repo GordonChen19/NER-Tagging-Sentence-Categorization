@@ -6,6 +6,7 @@ This project focuses on two task: (i) Named Entity Recognition (NER) sequence ta
 ## Requirements
 - Python >= 3.8
 - Use `pip install -r requirements.txt` to install the necessary packages.
+- To install pytorch, refer to https://pytorch.org/ for os-specific instructions
 
 ## Directory Structure
 ```bash
