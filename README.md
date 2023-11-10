@@ -18,6 +18,7 @@ This project focuses on two task: (i) Named Entity Recognition (NER) sequence ta
 Part I of this project, which is focused on Sequence Tagging for NER, can be found in the notebook located at `./notebooks/Question1.ipynb`.
 
 ## Part II: Sentence-Level Categorization: Question Classification
+Part II of this project, which is focused on Sequence Tagging for NER, can be found in the notebook located at `./notebooks/Question2.ipynb`.
 
 <TODO>
 
